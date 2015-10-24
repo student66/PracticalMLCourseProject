@@ -1,1 +1,1 @@
-Practical Machine Learning course project: [here](here)
+Practical Machine Learning course project: [click here](http://student66.github.io/PracticalMLCourseProject/).
