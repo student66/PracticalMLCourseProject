@@ -353,6 +353,11 @@ gbm.tst.cm
 
 The result shows out of sample accuracy `0.9941` and kappa `0.9926`. The confidence interval and p-value are also quite reasonably good: `(0.9912, 0.9963)` and `< 2.2e-16` correspondingly.
 
+The out of sample error would be `1 - accuracy`:
+```{r}
+1 - 0.9941
+```
+
 ### Prepare and submit the prediction on the given 20-sample test
 
 Now I will use the same GBM model to perform prediction on the *given test set* of 20 samples, which has not been used until now.
