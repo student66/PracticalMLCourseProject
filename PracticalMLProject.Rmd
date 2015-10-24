@@ -1,0 +1,381 @@
+
+## Practical Machine Learning - Course Project
+
+### Background
+
+Human Activity Recognition (HAR) has become very active research area. One approach to recognizing activity is analizyng information from wearable sensors. This project explores the possibility to apply machine learning methods to clasify the data collected from wearable sensors. The aim is to build machine learning model that would help predict with reasonable accuracy whether a weight lifting exercise is performed in one of several manners.
+
+This work is based on the data available from [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+Reference:
+
+*Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.*
+
+Web link: http://groupware.les.inf.puc-rio.br/har#ixzz3oxAZvgwL
+
+
+### Study design
+
+ - Get the data
+ - Partition the given training set into three sub-sets: 
+     - training set
+     - validation set
+     - testing set
+ - Build several models using the trainig set.
+ - Use the validataion set to compate the models and select one of them as final.
+ - Evaluate the selected model on the test set.
+ 
+Note that the testing set as result of the partitioning is only used for out of sample error evaluation. Also this is not to be confused with the "given test set", which is used to submit the predicted values to Coursera for grading.
+ 
+Once the selected method is ealuated, it will be used to make predictions on the given test set and submit the results.
+
+### Libraries and global settings
+
+The following libraries will be used.
+
+```{r message=FALSE}
+# Load the needed libraries
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(corrplot )
+library(gridExtra)
+
+# Clear the workspace
+rm(list=ls())
+```
+
+The following logical variable is used to specify if the model is built and saved already. Once built, the model is saved and later loaded from file to save time for the rest of the work.
+
+```{r}
+model.saved = TRUE
+```
+
+
+### Data
+
+The original data are available from 
+
+ - http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises
+
+The training and test data for the course project have been downloaded from the following links:
+
+ - [Training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+ - [Test Data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+Read the *given training set* CSV file
+
+```{r}
+given.training.set = read.csv("./data-project/pml-training.csv")
+```
+
+Check dimensions and var names
+
+```{r}
+dim(given.training.set)
+```
+
+```{r, eval=FALSE}
+names(given.training.set)
+# output now shown here for brevity
+```
+
+Checking the proportions of the outcome variable.
+
+```{r}
+prop.table( table(given.training.set$classe) )
+```
+
+The counts of different classes observations are almost uniformly distributed.
+
+### Partition the data set
+
+Now I split the given data set into training, validation, and test sets. Then I will use only the training set for exploration and model building. The validation set will be used later to compare models. The testing set will be used only for final out of sample evaluation.
+
+```{r}
+set.seed(123)
+inSet <- createDataPartition(given.training.set$classe, p=0.6, list=FALSE)
+training.set <- given.training.set[inSet,]
+testAndValidation.set <- given.training.set[-inSet,]
+set.seed(234)
+inSet <- createDataPartition(testAndValidation.set$classe, p=0.5, list=FALSE)
+validation.set <- testAndValidation.set[inSet,]
+testing.set <- testAndValidation.set[-inSet,]
+
+rm("testAndValidation.set", "given.training.set")
+```
+
+The number of rows for the training, validation and test sets are correspondingly:
+
+```{r}
+c(nrow(training.set), nrow(validation.set), nrow(testing.set))
+```
+
+### Explore and clean the data. 
+
+Now I start with brief exploration of the training set to get familiar with the data. If needed, I would do cleaning and feature engineering.
+
+```{r, eval=FALSE}
+str(training.set)
+summary(training.set)
+View(training.set)
+# output not shown here
+```
+Looking at summaries and visually inspecting the data set reveals that many of the columns are practically empty. I will keep only the non-empty columns with raw values, and remove all others.
+
+Columns to keep:
+```{r}
+predictorNames = 
+  c( #belt
+    "roll_belt",        "pitch_belt",       "yaw_belt", 
+    "gyros_belt_x",     "gyros_belt_y",     "gyros_belt_z",
+    "accel_belt_x",     "accel_belt_y",     "accel_belt_z", 
+    #arm
+    "roll_arm",         "pitch_arm",        "yaw_arm" , 
+    "gyros_arm_x",      "gyros_arm_y",      "gyros_arm_z",
+    "accel_arm_x",      "accel_arm_y",      "accel_arm_z", 
+    #forearm
+    "roll_forearm",     "pitch_forearm",    "yaw_forearm",
+    "gyros_forearm_x",  "gyros_forearm_y",  "gyros_forearm_z",
+    "accel_forearm_x",  "accel_forearm_y",  "accel_forearm_z",
+    #dumbbell
+    "roll_dumbbell",    "pitch_dumbbell",   "yaw_dumbbell",
+    "gyros_dumbbell_x", "gyros_dumbbell_y", "gyros_dumbbell_z",
+    "accel_dumbbell_x", "accel_dumbbell_y", "accel_dumbbell_z"
+  )
+outcomeName = "classe"
+
+training.set = training.set[,c(predictorNames, outcomeName)]
+```
+At this point the training set has 36 predictors plus the outcome `classe`.
+
+Same transformation (removing variables) needs to be performed on the validation and testing sets.
+
+```{r}
+validation.set = validation.set[,c(predictorNames, outcomeName)]
+testing.set = testing.set[,c(predictorNames, outcomeName)]
+```
+
+Check for missing values:
+```{r}
+sum(is.na(training.set))
+```
+
+Check for variables with zero or near-zero variance:
+```{r}
+nzv <- nearZeroVar(training.set, saveMetrics = TRUE)
+nzv
+```
+
+Explore correlations using corrplot:
+```{r}
+corMat <- cor(training.set[, -37])
+corrplot(corMat, method = "circle", type = "lower", order = "FPC", tl.cex = 0.75, tl.col = gray(.5))
+```
+
+Most features do not show strong correlations. The decison is to keep them all for now.
+
+At this point I run two models - GBM and Random Forest - not for true modeling, but only to check for variabbles importance according to these models.
+
+```{r, message=FALSE}
+if( ! model.saved ) {
+  fit.control <- trainControl(method='cv', 
+                              number=5,
+                              returnResamp='none', 
+                              verboseIter = FALSE)
+  
+  gbm.ex.model <- train(classe~., 
+                        data=training.set,
+                        trControl=fit.control, 
+                        method="gbm",
+                        verbose = FALSE)
+  
+  rf.ex.model <- train(classe~., 
+                       data=training.set,
+                       trControl=fit.control, 
+                       method="rf",
+                       verbose = FALSE)
+  
+  # save the models to RDS
+  saveRDS(gbm.ex.model, "gbm_ex_model.rds")
+  saveRDS(rf.ex.model, "rf_ex_model.rds")
+} else {
+  # load the models from RDS
+  gbm.ex.model <- readRDS("gbm_ex_model.rds") # to load it
+  rf.ex.model <- readRDS("rf_ex_model.rds") # to load it
+}
+```
+
+Plot the variable importance results.
+```{r, message=FALSE}
+# Plot varImp
+g1 = plot(varImp(gbm.ex.model,scale=F, tl.cex = 0.8))
+g2 = plot(varImp(rf.ex.model,scale=F, tl.cex = 0.8))
+grid.arrange(g1, g2, ncol=2)
+```
+
+GBM shows several almost unimportant features. The RF method shows all vars as more or less important. For now I am keeping all variables.
+
+### Modeling
+
+Using the `caret` library, I wil lbuild and compare three models of different kinds - GBM, Random Forest, and SVM.
+
+The following train control will be used for all models. It specifies 7-fold cross-validation.
+
+```{r, message=FALSE}
+fit.control <- trainControl(method='cv', 
+                            number=7,
+                            returnResamp='none', 
+                            verboseIter = FALSE)
+```
+
+#### GBM Model
+
+```{r, message=FALSE}
+
+if( ! model.saved ) {
+  gbm.grid <-  expand.grid(interaction.depth = c(4, 6, 8),
+                           n.trees = (15:25)*20,
+                           shrinkage = 0.1,
+                           n.minobsinnode = c(10,20))
+  set.seed(123)
+  gbm.model <- train(classe ~ ., 
+                     data = training.set,
+                     method = "gbm",
+                     trControl = fit.control,
+                     verbose = FALSE,
+                     tuneGrid = gbm.grid)
+  saveRDS(gbm.model, "gbm_model.rds")
+} else {
+  gbm.model <- readRDS("gbm_model.rds")
+}
+```
+
+```{r}
+gbm.model$bestTune
+gbm.model$finalModel
+plot(gbm.model)
+```
+
+#### Random Forest Model
+
+```{r, message=FALSE}
+if( ! model.saved ) {
+  set.seed(123)
+  rf.model <- train(classe ~ ., 
+                    data = training.set,
+                    method = "rf",
+                    trControl = fit.control,
+                    verbose = FALSE 
+  )
+  saveRDS(rf.model, "rf_model.rds")
+} else {
+  rf.model <- readRDS("rf_model.rds")
+}
+
+```
+
+```{r}
+rf.model$finalModel
+```
+
+#### SVM Model
+
+```{r, message=FALSE}
+if( ! model.saved ) {
+  set.seed(123)
+  svm.model <- train(classe ~ ., 
+                    data = training.set,
+                    method = "svmRadial",
+                    trControl = fit.control,
+                    verbose = FALSE 
+  )
+  saveRDS(svm.model, "svm_model.rds")
+} else {
+  svm.model <- readRDS("svm_model.rds")
+}
+```
+
+```{r}
+svm.model$finalModel
+```
+
+
+### Evaluate and compare the models using the *validation* set
+
+```{r, message=FALSE}
+gbm.val.pred <- predict(gbm.model, newdata = validation.set)
+gbm.val.cm <- confusionMatrix(gbm.val.pred, validation.set$classe)
+
+rf.val.pred <- predict(rf.model, newdata = validation.set)
+rf.val.cm <- confusionMatrix(rf.val.pred, validation.set$classe)
+
+svm.val.pred <- predict(svm.model, newdata = validation.set)
+svm.val.cm <- confusionMatrix(svm.val.pred, validation.set$classe)
+```
+
+The followwing code can be used to print and review the full confusion matrices.
+
+```{r, eval=FALSE}
+gbm.val.cm; rf.val.cm; svm.val.cm
+```
+
+Here I am comparing the accuracy and kappa values for the three modules.
+
+```{r}
+gbm.accuracy <- gbm.val.cm$overall[[1]]
+gbm.kappa <- gbm.val.cm$overall[[2]]
+
+rf.accuracy <- rf.val.cm$overall[[1]]
+rf.kappa <- rf.val.cm$overall[[2]]
+
+svm.accuracy <- svm.val.cm$overall[[1]]
+svm.kappa <- svm.val.cm$overall[[2]]
+
+tb <- data.frame(c(gbm.accuracy, rf.accuracy, svm.accuracy), 
+                 c(gbm.kappa, rf.kappa, svm.kappa), 
+                 row.names = c("GBM", "Random Forest", "SVM"))
+names(tb) <- c("accuracy", "cappa")
+
+tb
+```
+In this case the GBM model showed best performance on the validation set. I am selecting GBM as final model to be used on this project for this specific data set.
+
+### Evaluate the out of sample performance for the final model 
+
+The following code runs the previously created and selected GBM model on the *testing set*. Now for the first time I am using the *testing set*. 
+
+```{r, message=FALSE}
+gbm.tst.pred <- predict(gbm.model, newdata = testing.set)
+gbm.tst.cm <- confusionMatrix(gbm.tst.pred, testing.set$classe  )
+gbm.tst.cm
+```
+
+The result shows out of sample accuracy `0.9941` and kappa `0.9926`. The confidence interval and p-value are also quite reasonably good: `(0.9912, 0.9963)` and `< 2.2e-16` correspondingly.
+
+### Prepare and submit the prediction on the given 20-sample test
+
+Now I will use the same GBM model to perform prediction on the *given test set* of 20 samples, which has not been used until now.
+
+The following code below is used to read the 20-sample dataset,  select the features used on the training set, and then predict the outcome using the previously built GBM model. Note that the 20-sample test does not have outcome variable. It wil lbe predicted and submitted to Coursera for grading.
+
+```{r, eval=FALSE}
+given.test.set = read.csv("data-project/pml-testing.csv")
+given.test.set = given.test.set[,predictorNames]
+gbm.to.submit.pred <- predict(gbm.model, newdata = given.test.set)
+```
+
+Split the result in 20 separate files and upload them as required.
+
+```{r, eval=FALSE}
+pml_write_files = function(x) {
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(as.character(gbm.to.submit.pred))
+```
+
