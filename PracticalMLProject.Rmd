@@ -3,7 +3,7 @@
 
 ### Background
 
-Human Activity Recognition (HAR) has become very active research area. One approach to recognizing activity is analizyng information from wearable sensors. This project explores the possibility to apply machine learning methods to clasify the data collected from wearable sensors. The aim is to build machine learning model that would help predict with reasonable accuracy whether a weight lifting exercise is performed in one of several manners.
+Human Activity Recognition (HAR) has become very active research area. One approach to recognizing activity is analyzing information from wearable sensors. This project explores the possibility to apply machine learning methods to classify the data collected from wearable sensors. The aim is to build machine learning model that would help predict with reasonable accuracy whether a weight lifting exercise is performed in one of several manners.
 
 This work is based on the data available from [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
 
@@ -21,13 +21,13 @@ Web link: http://groupware.les.inf.puc-rio.br/har#ixzz3oxAZvgwL
      - training set
      - validation set
      - testing set
- - Build several models using the trainig set.
- - Use the validataion set to compate the models and select one of them as final.
+ - Build several models using the training set.
+ - Use the validation set to compare the models and select one of them as final.
  - Evaluate the selected model on the test set.
  
 Note that the testing set as result of the partitioning is only used for out of sample error evaluation. Also this is not to be confused with the "given test set", which is used to submit the predicted values to Coursera for grading.
  
-Once the selected method is ealuated, it will be used to make predictions on the given test set and submit the results.
+Once the selected method is evaluated, it will be used to make predictions on the given test set and submit the results.
 
 ### Libraries and global settings
 
@@ -173,7 +173,7 @@ corMat <- cor(training.set[, -37])
 corrplot(corMat, method = "circle", type = "lower", order = "FPC", tl.cex = 0.75, tl.col = gray(.5))
 ```
 
-Most features do not show strong correlations. The decison is to keep them all for now.
+Most features do not show strong correlations. The decision is to keep them all for now.
 
 At this point I run two models - GBM and Random Forest - not for true modeling, but only to check for variabbles importance according to these models.
 
@@ -214,11 +214,11 @@ g2 = plot(varImp(rf.ex.model,scale=F, tl.cex = 0.8))
 grid.arrange(g1, g2, ncol=2)
 ```
 
-GBM shows several almost unimportant features. The RF method shows all vars as more or less important. For now I am keeping all variables.
+GBM shows several almost unimportant features. The RF method shows all variables as more or less important. For now I am keeping all variables.
 
 ### Modeling
 
-Using the `caret` library, I wil lbuild and compare three models of different kinds - GBM, Random Forest, and SVM.
+Using the `caret` library, I will build and compare three models of different kinds - GBM, Random Forest, and SVM.
 
 The following train control will be used for all models. It specifies 7-fold cross-validation.
 
@@ -314,7 +314,7 @@ svm.val.pred <- predict(svm.model, newdata = validation.set)
 svm.val.cm <- confusionMatrix(svm.val.pred, validation.set$classe)
 ```
 
-The followwing code can be used to print and review the full confusion matrices.
+The following code can be used to print and review the full confusion matrices.
 
 ```{r, eval=FALSE}
 gbm.val.cm; rf.val.cm; svm.val.cm
@@ -343,7 +343,7 @@ In this case the GBM model showed best performance on the validation set. I am s
 
 ### Evaluate the out of sample performance for the final model 
 
-The following code runs the previously created and selected GBM model on the *testing set*. Now for the first time I am using the *testing set*. 
+The following code runs the previously created and selected GBM model on the *testing set*. Now for the first time I am using my *testing set*. 
 
 ```{r, message=FALSE}
 gbm.tst.pred <- predict(gbm.model, newdata = testing.set)
@@ -357,7 +357,7 @@ The result shows out of sample accuracy `0.9941` and kappa `0.9926`. The confide
 
 Now I will use the same GBM model to perform prediction on the *given test set* of 20 samples, which has not been used until now.
 
-The following code below is used to read the 20-sample dataset,  select the features used on the training set, and then predict the outcome using the previously built GBM model. Note that the 20-sample test does not have outcome variable. It wil lbe predicted and submitted to Coursera for grading.
+The code below is used to read the 20-sample dataset, select the features used on the training set, and then predict the outcome using the previously built GBM model. Note that the 20-sample test does not have outcome variable. It will be predicted and submitted to Coursera for grading.
 
 ```{r, eval=FALSE}
 given.test.set = read.csv("data-project/pml-testing.csv")
